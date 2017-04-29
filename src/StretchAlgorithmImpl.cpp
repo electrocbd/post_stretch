@@ -29,13 +29,13 @@ class StretchAlgorithmImpl : public StretchAlgorithm
         StretchAlgorithmImpl(const Params& params_) :
             m_Params(params_) {}
         virtual ~StretchAlgorithmImpl() {}
-        virtual void Process(int nLayer,std::vector<PasGCode>& v);
+        virtual void Process(int nLayer,std::vector<GCodeStep>& v);
     private:
-        void TraiteInternal(std::vector<PasGCode>& v,VisuGCode *visu);
+        void TraiteInternal(std::vector<GCodeStep>& v,VisuGCode *visu);
         const Params& m_Params /** Paramètres globaux */;
         std::vector<Segment> m_Plastique /** Segments de plastique de la couche courante */;
-        void AjoutePlastique(vector<PasGCode*>& v,VisuGCode *visu);
-        string Dump(const PasGCode& pas);
+        void AjoutePlastique(vector<GCodeStep*>& v,VisuGCode *visu);
+        string Dump(const GCodeStep& step);
         double CarreDistance(const pair<double,double>& p1,const pair<double,double>& p2);
         /** Corrige un segment aux indices i1 et i2 dans les deux tableaux v (mouvement désiré)
          * et vTrans (mouvement corrigé)
@@ -85,42 +85,42 @@ double StretchAlgorithmImpl::CarreDistance(const pair<double,double>& p1,const p
     return (p2.first-p1.first)*(p2.first-p1.first) + (p2.second-p1.second)*(p2.second-p1.second);
 }
 
-string StretchAlgorithmImpl::Dump(const PasGCode& pas)
+string StretchAlgorithmImpl::Dump(const GCodeStep& step)
 {
     ostringstream ss;
-    if (pas.m_Pas == GC_NOP)
+    if (step.m_Step == GC_NOP)
     {
         ss << "GC_NOP";
     }
-    else if (pas.m_Pas==GC_NOP)
+    else if (step.m_Step==GC_NOP)
     {
         ss << "GC_NOP";
     }
-    else if (pas.m_Pas==GC_FanOn)
+    else if (step.m_Step==GC_FanOn)
     {
         ss << "GC_FanOn";
     }
-    else if (pas.m_Pas==GC_FanOff)
+    else if (step.m_Step==GC_FanOff)
     {
         ss << "GC_FanOff";
     }
-    else if (pas.m_Pas==GC_RetractStart)
+    else if (step.m_Step==GC_RetractStart)
     {
         ss << "GC_RetractStart";
     }
-    else if (pas.m_Pas==GC_RetractStop)
+    else if (step.m_Step==GC_RetractStop)
     {
         ss << "GC_RetractStop";
     }
-    else if (pas.m_Pas==GC_MoveFast)
+    else if (step.m_Step==GC_MoveFast)
     {
         ss << "GC_MoveFast";
     }
-    else if (pas.m_Pas==GC_MoveLin)
+    else if (step.m_Step==GC_MoveLin)
     {
-        ss << "GC_MoveLin X=" << pas.m_X << " Y=" << pas.m_Y << " E=" << pas.m_E;
+        ss << "GC_MoveLin X=" << step.m_X << " Y=" << step.m_Y << " E=" << step.m_E;
     }
-    else if (pas.m_Pas==GC_DefinePos)
+    else if (step.m_Step==GC_DefinePos)
     {
         ss << "GC_DefinePos";
     }
@@ -374,7 +374,7 @@ void StretchAlgorithmImpl::AjoutePlastiqueCirculaire(vector<pair<double,double>>
 }
 
 
-void StretchAlgorithmImpl::AjoutePlastique(vector<PasGCode*>& vG,VisuGCode *visu)
+void StretchAlgorithmImpl::AjoutePlastique(vector<GCodeStep*>& vG,VisuGCode *visu)
 {
     vector<pair<double,double>> v; // Positions d'origine
     vector<pair<double,double>> vTrans; // Positions transformées
@@ -412,11 +412,11 @@ std::unique_ptr<StretchAlgorithm> StretchAlgorithmFactory(const Params& params)
     return unique_ptr<StretchAlgorithm>(new StretchAlgorithmImpl(params));
 }
 
-void StretchAlgorithmImpl::TraiteInternal(std::vector<PasGCode>& v,VisuGCode *visu)
+void StretchAlgorithmImpl::TraiteInternal(std::vector<GCodeStep>& v,VisuGCode *visu)
 {
     m_Plastique.clear();
     double curE = 0;
-    vector<PasGCode*> vPos;
+    vector<GCodeStep*> vPos;
     for (auto i = v.begin();i!=v.end();i++)
     {
         if (visu)
@@ -431,14 +431,14 @@ void StretchAlgorithmImpl::TraiteInternal(std::vector<PasGCode>& v,VisuGCode *vi
         {
             if (visu && vPos.size())
             {
-                cerr << "flush pos " << i-v.begin() << " type pas " << i->m_Pas << endl;
+                cerr << "flush pos " << i-v.begin() << " step " << i->m_Step << endl;
             }
             if (vPos.size() >= 2)
                 AjoutePlastique(vPos,visu);
             vPos.clear();
             vPos.push_back(&*i);
         }
-        else if (i->m_Pas == GC_MoveFast || i->m_Pas == GC_MoveLin)
+        else if (i->m_Step == GC_MoveFast || i->m_Step == GC_MoveLin)
         {
             vPos.push_back(&*i);
         }
@@ -450,7 +450,7 @@ void StretchAlgorithmImpl::TraiteInternal(std::vector<PasGCode>& v,VisuGCode *vi
     }
 }
 
-void StretchAlgorithmImpl::Process(int nLayer,std::vector<PasGCode>& v)
+void StretchAlgorithmImpl::Process(int nLayer,std::vector<GCodeStep>& v)
 {
     if (m_Params.dumpLayer == nLayer)
     {

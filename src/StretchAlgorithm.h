@@ -5,7 +5,7 @@
 
 #include <vector>
 #include <memory>
-#include "PasGCode.h"
+#include "GCodeStep.h"
 
 /** GCode processing algorithm interface */
 struct StretchAlgorithm
@@ -16,7 +16,7 @@ struct StretchAlgorithm
      *
      * @param nLayer Layer number, starting at 1
      * @param v G-Code steps of the current layer */
-    virtual void Process(int nLayer,std::vector<PasGCode>& v) = 0;
+    virtual void Process(int nLayer,std::vector<GCodeStep>& v) = 0;
 };
 
 class Params;

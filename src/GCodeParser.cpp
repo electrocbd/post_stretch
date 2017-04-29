@@ -4,7 +4,7 @@
 #include <boost/spirit/include/phoenix_bind.hpp>
 #include <boost/spirit/include/phoenix_operator.hpp>
 #include <iomanip>
-#include "PasGCode.h"
+#include "GCodeStep.h"
 
 using namespace std;
 
@@ -19,65 +19,73 @@ using qi::rule;
 
 namespace phx = boost::phoenix;
 
-/** Classe pour écrire le G-Code
+/** GCode writer class
  *
- * La classe garde un état interne pour n'écrire les paramètres
- * des ordres de mouvement que lorsque ces paramètres changent
- *
- * Il faut donc appeler la méthode Ecrit dans l'ordre des pas de g-code
- *
- * @todo Utiliser des entiers plutôt que des double?
- */
-struct EcritGCode
-{
-    double m_XCourant;
-    double m_YCourant;
-    double m_ZCourant;
-    double m_ECourant;
-    double m_FCourant;
+The object keeps the values of all parameters (X,Y,Z,E) in order to write only changes
 
-    EcritGCode() :
-        m_XCourant(0),
-        m_YCourant(0),
-        m_ZCourant(0),
-        m_ECourant(0),
-        m_FCourant(0) {}
+For example, the two following steps:
+@verbatim
+G01 X10 Y10 Z10
+G01 X10 Y11 Z10
+@endverbatim
+
+Will be written:
+
+@verbatim
+G01 X10 Y10 Z10
+G01 Y11
+@endverbatim
+ */
+struct GCodeWriter
+{
+    double m_CurX;
+    double m_CurY;
+    double m_CurZ;
+    double m_CurE;
+    double m_CurF;
+
+    GCodeWriter() :
+        m_CurX(0),
+        m_CurY(0),
+        m_CurZ(0),
+        m_CurE(0),
+        m_CurF(0) {}
 
     /** Écrit le g-code sur la sortie standard
      *
      * @todo Il faut pouvoir spécifier un flux
      */
-    void Ecrit(const PasGCode& pas);
+    void Ecrit(const GCodeStep& step);
     /** Écriture des paramètres des commandes G0 et G1
      *
      * Il faut écrire le minimum de paramètres pour limiter la volume
      * de données à transmettre. En général, lorsqu'un paramètre est inchangé
      * depuis la précédente commande, il est possible de ne pas le spécifier
      */
-    void ParamsG0G1(const PasGCode& pas);
+    void ParamsG0G1(const GCodeStep& step);
 };
 
-void EcritGCode::ParamsG0G1(const PasGCode& pas)
+void GCodeWriter::ParamsG0G1(const GCodeStep& step)
 {
-    if (m_FCourant != pas.m_F)
-        cout << " F" << pas.m_F;
-    if (m_XCourant != pas.m_X || m_YCourant != pas.m_Y || m_ZCourant != pas.m_Z)
+    if (m_CurF != step.m_F)
+        cout << " F" << step.m_F;
+    if (m_CurX != step.m_X || m_CurY != step.m_Y || m_CurZ != step.m_Z)
     {
-        cout << " X" << pas.m_X;
-        cout << " Y" << pas.m_Y;
+        cout << " X" << step.m_X;
+        cout << " Y" << step.m_Y;
     }
-    if (m_ZCourant != pas.m_Z)
-        cout << " Z" << pas.m_Z;
-    if (m_ECourant != pas.m_E)
-        cout << " E" << setprecision(10) << pas.m_E;
+    if (m_CurZ != step.m_Z)
+        cout << " Z" << step.m_Z;
+    if (m_CurE != step.m_E)
+        cout << " E" << setprecision(10) << step.m_E;
 }
 
-void EcritGCode::Ecrit(const PasGCode& pas)
+void GCodeWriter::Ecrit(const GCodeStep& step)
 {
-    switch (pas.m_Pas)
+    switch (step.m_Step)
     {
         case GC_FanOn:
-            cout << "M106 S" << pas.m_S;
+            cout << "M106 S" << step.m_S;
             break;
         case GC_FanOff:
             cout << "M107";
@@ -90,46 +98,46 @@ void EcritGCode::Ecrit(const PasGCode& pas)
             break;
         case GC_MoveFast:
             cout << "G0";
-            ParamsG0G1(pas);
+            ParamsG0G1(step);
             break;
         case GC_MoveLin:
             cout << "G1";
-            ParamsG0G1(pas);
+            ParamsG0G1(step);
             break;
         case GC_DefinePos:
             cout << "G92";
-            ParamsG0G1(pas);
+            ParamsG0G1(step);
             break;
     }
 
-    if (pas.m_Comment.size())
-        cout << ";" << pas.m_Comment;
+    if (step.m_Comment.size())
+        cout << ";" << step.m_Comment;
     cout << endl;
 
-    m_XCourant = pas.m_X;
-    m_YCourant = pas.m_Y;
-    m_ZCourant = pas.m_Z;
-    m_ECourant = pas.m_E;
-    m_FCourant = pas.m_F;
+    m_CurX = step.m_X;
+    m_CurY = step.m_Y;
+    m_CurZ = step.m_Z;
+    m_CurE = step.m_E;
+    m_CurF = step.m_F;
 }
 
 /** Données temporaires de l'analyse du fichier gcode
  *
- * Cet objet est utilisé par la grammaire @ref grammaire_gcode
+ * Cet objet est utilisé par la grammaire @ref gcode_grammar
  * lors de son analyse de chaque ligne
  */
-struct ParserFichierGCode
+struct GCodeFileParser
 {
     /** Numéro de la couche courante */
     int m_nLayer;
     /** Valeur Z de la couche courante */
     double m_ZCouche;
     /** Ensemble des opérations de la couche courante */
-    vector<PasGCode> m_vPasCouche;
+    vector<GCodeStep> m_vPasCouche;
     StretchAlgorithm *algo;
-    EcritGCode m_Ecrit;
+    GCodeWriter m_Ecrit;
 
-    ParserFichierGCode(
+    GCodeFileParser(
             StretchAlgorithm *algo_) :
         algo(algo_),
         m_nLayer(0),
@@ -145,15 +153,15 @@ struct ParserFichierGCode
     void MouvementLineaire();
     void DefinePos();
 
-    PasGCode m_PasCourant /** Pas en cours de décodage */;
+    GCodeStep m_CurrentStep /** Pas en cours de décodage */;
 
-    void FlushPas() /** Écrit le pas courant */;
+    void FlushPas() /** Write current GCode step */;
 
     /** Termine toutes les opérations accumulées */
     void Flush();
 };
 
-void ParserFichierGCode::Flush()
+void GCodeFileParser::Flush()
 {
     if (m_vPasCouche.size())
     {
@@ -164,9 +172,9 @@ void ParserFichierGCode::Flush()
 }
 
 
-void ParserFichierGCode::FlushPas()
+void GCodeFileParser::FlushPas()
 {
-    if (m_ZCouche != m_PasCourant.m_Z)
+    if (m_ZCouche != m_CurrentStep.m_Z)
     {
         if (m_vPasCouche.size())
         {
@@ -178,94 +186,94 @@ void ParserFichierGCode::FlushPas()
             }
             m_vPasCouche.clear();
         }
-        m_ZCouche = m_PasCourant.m_Z;
+        m_ZCouche = m_CurrentStep.m_Z;
     }
-    m_vPasCouche.push_back(m_PasCourant);
+    m_vPasCouche.push_back(m_CurrentStep);
 
-    // Remise à zéro pour le pas suivant
-    m_PasCourant.m_Comment.clear();
-    m_PasCourant.m_Pas = GC_NOP;
+    // Clear next gcode step
+    m_CurrentStep.m_Comment.clear();
+    m_CurrentStep.m_Step = GC_NOP;
 }
 
-void ParserFichierGCode::Commentaire(const vector<char>& v)
+void GCodeFileParser::Commentaire(const vector<char>& v)
 {
-    m_PasCourant.m_Comment = string(v.begin(),v.end());
+    m_CurrentStep.m_Comment = string(v.begin(),v.end());
 }
 
-void ParserFichierGCode::FanOn(int n)
+void GCodeFileParser::FanOn(int n)
 {
-    m_PasCourant.m_Pas = GC_FanOn;
-    m_PasCourant.m_S = n;
+    m_CurrentStep.m_Step = GC_FanOn;
+    m_CurrentStep.m_S = n;
 }
 
-void ParserFichierGCode::FanOff()
+void GCodeFileParser::FanOff()
 {
-    m_PasCourant.m_Pas = GC_FanOff;
+    m_CurrentStep.m_Step = GC_FanOff;
 }
 
-void ParserFichierGCode::DebutRetractation()
+void GCodeFileParser::DebutRetractation()
 {
-    m_PasCourant.m_Pas = GC_RetractStart;
+    m_CurrentStep.m_Step = GC_RetractStart;
 }
 
-void ParserFichierGCode::FinRetractation()
+void GCodeFileParser::FinRetractation()
 {
-    m_PasCourant.m_Pas = GC_RetractStop;
+    m_CurrentStep.m_Step = GC_RetractStop;
 }
 
-void ParserFichierGCode::ParametreE(double v)
+void GCodeFileParser::ParametreE(double v)
 {
-    m_PasCourant.m_E = v;
+    m_CurrentStep.m_E = v;
 }
 
-void ParserFichierGCode::MouvementRapide()
+void GCodeFileParser::MouvementRapide()
 {
-    m_PasCourant.m_Pas = GC_MoveFast;
+    m_CurrentStep.m_Step = GC_MoveFast;
 }
 
-void ParserFichierGCode::MouvementLineaire()
+void GCodeFileParser::MouvementLineaire()
 {
-    m_PasCourant.m_Pas = GC_MoveLin;
+    m_CurrentStep.m_Step = GC_MoveLin;
 }
 
-void ParserFichierGCode::DefinePos()
+void GCodeFileParser::DefinePos()
 {
-    m_PasCourant.m_Pas = GC_DefinePos;
+    m_CurrentStep.m_Step = GC_DefinePos;
 }
 
 
 /** Grammaire d'analyse d'un ligne de g_code
  */
-struct grammaire_gcode : grammar<string::iterator>
+struct gcode_grammar : grammar<string::iterator>
 {
-    ParserFichierGCode& data;
-    grammaire_gcode(ParserFichierGCode& data_) : grammaire_gcode::base_type(start),data(data_)
+    GCodeFileParser& data;
+    gcode_grammar(GCodeFileParser& data_) : gcode_grammar::base_type(start),data(data_)
     {
-        start = -instruction >> -comment >> eps[phx::bind(&ParserFichierGCode::FlushPas,&data)];
+        start = -instruction >> -comment >> eps[phx::bind(&GCodeFileParser::FlushPas,&data)];
     }
     rule<string::iterator> comment =
-        (";" >> *char_)[phx::bind(&ParserFichierGCode::Commentaire,&data,qi::_1)];
+        (";" >> *char_)[phx::bind(&GCodeFileParser::Commentaire,&data,qi::_1)];
     rule<string::iterator> param =
-        ("X" >> double_)[phx::ref(data.m_PasCourant.m_X) = qi::_1] |
-        ("Y" >> double_)[phx::ref(data.m_PasCourant.m_Y) = qi::_1] |
-        ("Z" >> double_)[phx::ref(data.m_PasCourant.m_Z) = qi::_1] |
-        ("E" >> double_)[phx::bind(&ParserFichierGCode::ParametreE,&data,qi::_1)] |
-        ("F" >> double_)[phx::ref(data.m_PasCourant.m_F) = qi::_1]
+        ("X" >> double_)[phx::ref(data.m_CurrentStep.m_X) = qi::_1] |
+        ("Y" >> double_)[phx::ref(data.m_CurrentStep.m_Y) = qi::_1] |
+        ("Z" >> double_)[phx::ref(data.m_CurrentStep.m_Z) = qi::_1] |
+        ("E" >> double_)[phx::bind(&GCodeFileParser::ParametreE,&data,qi::_1)] |
+        ("F" >> double_)[phx::ref(data.m_CurrentStep.m_F) = qi::_1]
         ;
     rule<string::iterator> ins_g0 =
-        (lit("G0") >> +char_(' ') >> (param % ' '))[phx::bind(&ParserFichierGCode::MouvementRapide,&data)];
+        (lit("G0") >> +char_(' ') >> (param % ' '))[phx::bind(&GCodeFileParser::MouvementRapide,&data)];
     rule<string::iterator> ins_m107 =
-        lit("M107")[phx::bind(&ParserFichierGCode::FanOff,&data)];
+        lit("M107")[phx::bind(&GCodeFileParser::FanOff,&data)];
     rule<string::iterator> ins_g1 =
-        ("G1" >> +char_(' ') >> (param % ' '))[phx::bind(&ParserFichierGCode::MouvementLineaire,&data)];
+        ("G1" >> +char_(' ') >> (param % ' '))[phx::bind(&GCodeFileParser::MouvementLineaire,&data)];
     rule<string::iterator> ins_g10 =
-        lit("G10")[phx::bind(&ParserFichierGCode::DebutRetractation,&data)];
+        lit("G10")[phx::bind(&GCodeFileParser::DebutRetractation,&data)];
     rule<string::iterator> ins_g11 =
-        lit("G11")[phx::bind(&ParserFichierGCode::FinRetractation,&data)];
+        lit("G11")[phx::bind(&GCodeFileParser::FinRetractation,&data)];
     rule<string::iterator> ins_m106 =
-        ("M106" >> +char_(' ') >> "S" >> int_)[phx::bind(&ParserFichierGCode::FanOn,&data,qi::_2)];
+        ("M106" >> +char_(' ') >> "S" >> int_)[phx::bind(&GCodeFileParser::FanOn,&data,qi::_2)];
     rule<string::iterator> ins_g92 =
-        (lit("G92") >> +char_(' ') >> (param % ' '))[phx::bind(&ParserFichierGCode::DefinePos,&data)];
+        (lit("G92") >> +char_(' ') >> (param % ' '))[phx::bind(&GCodeFileParser::DefinePos,&data)];
     rule<string::iterator> instruction =
         ins_g0 | ins_m107 | ins_g1 | ins_g10 | ins_g11 | ins_m106 | ins_g92;
     rule<string::iterator> start;
@@ -275,8 +283,8 @@ void GCodeParser(StretchAlgorithm *algo,istream& is)
 {
     string str;
     int nLigne = 0;
-    ParserFichierGCode data(algo);
-    grammaire_gcode grammaire_gcode_obj(data);
+    GCodeFileParser data(algo);
+    gcode_grammar gcode_grammar_obj(data);
     while (!getline(is,str).fail())
     {
         ++nLigne;
@@ -286,7 +294,7 @@ void GCodeParser(StretchAlgorithm *algo,istream& is)
         bool res = parse(
                 it,
                 str.end(),
-                grammaire_gcode_obj
+                gcode_grammar_obj
                 );
         if (!res)
         {
