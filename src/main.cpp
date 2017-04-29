@@ -103,7 +103,7 @@ int main(int argc,char **argv)
             return -1;
         }
         unique_ptr<StretchAlgorithm> algo(StretchAlgorithmFactory(params));
-        if (GCodeFile == "--")
+        if (GCodeFile == "-")
             GCodeParser(algo.get(),cin);
         else
         {
