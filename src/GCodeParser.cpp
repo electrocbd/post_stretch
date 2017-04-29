@@ -143,7 +143,7 @@ struct GCodeFileParser
         m_nLayer(0),
         m_ZCouche(0) {}
 
-    void Commentaire(const vector<char>& v);
+    void Comment(const vector<char>& v);
     void FanOn(int n);
     void FanOff();
     void DebutRetractation();
@@ -195,7 +195,7 @@ void GCodeFileParser::FlushPas()
     m_CurrentStep.m_Step = GC_NOP;
 }
 
-void GCodeFileParser::Commentaire(const vector<char>& v)
+void GCodeFileParser::Comment(const vector<char>& v)
 {
     m_CurrentStep.m_Comment = string(v.begin(),v.end());
 }
@@ -242,7 +242,7 @@ void GCodeFileParser::DefinePos()
 }
 
 
-/** Grammaire d'analyse d'un ligne de g_code
+/** Boost.Spirit grammar of a g-code step
  */
 struct gcode_grammar : grammar<string::iterator>
 {
@@ -252,7 +252,7 @@ struct gcode_grammar : grammar<string::iterator>
         start = -instruction >> -comment >> eps[phx::bind(&GCodeFileParser::FlushPas,&data)];
     }
     rule<string::iterator> comment =
-        (";" >> *char_)[phx::bind(&GCodeFileParser::Commentaire,&data,qi::_1)];
+        (";" >> *char_)[phx::bind(&GCodeFileParser::Comment,&data,qi::_1)];
     rule<string::iterator> param =
         ("X" >> double_)[phx::ref(data.m_CurrentStep.m_X) = qi::_1] |
         ("Y" >> double_)[phx::ref(data.m_CurrentStep.m_Y) = qi::_1] |
@@ -282,12 +282,12 @@ struct gcode_grammar : grammar<string::iterator>
 void GCodeParser(StretchAlgorithm *algo,istream& is)
 {
     string str;
-    int nLigne = 0;
+    int nLine = 0;
     GCodeFileParser data(algo);
     gcode_grammar gcode_grammar_obj(data);
     while (!getline(is,str).fail())
     {
-        ++nLigne;
+        ++nLine;
         if (str.size() && str[str.size() -1] == '\r')
             str.resize(str.size()-1);
         string::iterator it = str.begin();
@@ -298,12 +298,12 @@ void GCodeParser(StretchAlgorithm *algo,istream& is)
                 );
         if (!res)
         {
-            cerr << "Erreur ligne " << nLigne /*<< " fichier " << rbFile.generic_string()*/ << endl;
+            cerr << "Error line " << nLine << endl;
             throw std::runtime_error("Invalid gcode");
         }
         if (it != str.end())
         {
-            cerr << "Ligne " << nLigne << " partielle (" << it-str.begin() << ")" << endl;
+            cerr << "Line " << nLine << " parsing stopped pos (" << it-str.begin() << ")" << endl;
             throw std::runtime_error("Invalid gcode");
         }
     }
