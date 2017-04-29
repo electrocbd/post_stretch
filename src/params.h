@@ -3,13 +3,13 @@
 
 /** @file */
 
-/** @brief Paramètre généraux */
+/** @brief Global parameters */
 struct Params
 {
-    int stretch /** Décalage de correction en microns */;
-    int wallWidth /** Largeur de piste en microns */;
-    int dumpLayer /** Couche pour laquelle il faut créer une image de débogage, ou 0 */;
-    int nozzleDiameter /** Diamètre du bec en microns */;
+    int stretch /** Stretch correction factor in microns */;
+    int wallWidth /** Wall width in microns */;
+    int dumpLayer /** Layer to debug, or 0 */;
+    int nozzleDiameter /** Nozzle diameter in microns */;
 };
 
 #endif

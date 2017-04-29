@@ -1,6 +1,6 @@
 #include "StretchAlgorithm.h"
 #include <memory>
-#include "visu.h"
+#include "GCodeDebugView.h"
 //#include "clipper/clipper.hpp"
 #include <iostream>
 #include <assert.h>
@@ -31,10 +31,10 @@ class StretchAlgorithmImpl : public StretchAlgorithm
         virtual ~StretchAlgorithmImpl() {}
         virtual void Process(int nLayer,std::vector<GCodeStep>& v);
     private:
-        void TraiteInternal(std::vector<GCodeStep>& v,VisuGCode *visu);
+        void TraiteInternal(std::vector<GCodeStep>& v,GCodeDebugView *debugView);
         const Params& m_Params /** Paramètres globaux */;
         std::vector<Segment> m_Plastique /** Segments de plastique de la couche courante */;
-        void AjoutePlastique(vector<GCodeStep*>& v,VisuGCode *visu);
+        void AjoutePlastique(vector<GCodeStep*>& v,GCodeDebugView *debugView);
         string Dump(const GCodeStep& step);
         double CarreDistance(const pair<double,double>& p1,const pair<double,double>& p2);
         /** Corrige un segment aux indices i1 et i2 dans les deux tableaux v (mouvement désiré)
@@ -44,7 +44,7 @@ class StretchAlgorithmImpl : public StretchAlgorithm
                 vector<pair<double,double>>& vTrans,
                 int i1,
                 int i2,
-                VisuGCode *visu,
+                GCodeDebugView *debugView,
                 double d2,
                 double d3,
                 double d4);
@@ -52,20 +52,20 @@ class StretchAlgorithmImpl : public StretchAlgorithm
          *
          * @param v Positions d'origine
          * @param vTrans Positions transformées
-         * @param visu Si non nul, traces d'affichage
+         * @param debugView Si non nul, traces d'affichage
          */
         void AjoutePlastiqueLineaire(vector<pair<double,double>>& v,
                vector<pair<double,double>>& vTrans,
-               VisuGCode *visu);
+               GCodeDebugView *debugView);
         /** La séquence semble être circulaire, il est possible de mieux calculer les virages
          *
          * @param v Positions d'origine
          * @param vTrans Positions transformées
-         * @param visu Si non nul, traces d'affichage
+         * @param debugView Si non nul, traces d'affichage
          */
         void AjoutePlastiqueCirculaire(vector<pair<double,double>>& v,
                vector<pair<double,double>>& vTrans,
-               VisuGCode *visu);
+               GCodeDebugView *debugView);
         /** Conversion de l'indice i passé en paramètre pour être dans l'intervalle [0:sz-1] */
         static int IndiceCirculaire(int i,int sz);
 };
@@ -131,7 +131,7 @@ void StretchAlgorithmImpl::CorrigeSegment(vector<pair<double,double>>& v,
         vector<pair<double,double>>& vTrans,
         int i1,
         int i2,
-        VisuGCode *visu,
+        GCodeDebugView *debugView,
         double d2,
         double d3,
         double d4)
@@ -144,8 +144,8 @@ void StretchAlgorithmImpl::CorrigeSegment(vector<pair<double,double>>& v,
     double xm = v[i1].first;
     //double ym = (v[i1].second + v[i2].second) / 2.0;
     double ym = v[i1].second;
-    //if (visu)
-    //    visu->Point(xm,ym,0);
+    //if (debugView)
+    //    debugView->Point(xm,ym,0);
     double xperp = -(v[i2].second - v[i1].second); // Coordonnées de la perpendiculaire au segment
     double yperp = (v[i2].first - v[i1].first);
     double dperp = sqrt(xperp*xperp+yperp*yperp); // Norme de la perpendiculaire
@@ -153,8 +153,8 @@ void StretchAlgorithmImpl::CorrigeSegment(vector<pair<double,double>>& v,
     yperp /= dperp;
     double xp1 = xm + xperp * d2;
     double yp1 = ym + yperp * d2;
-    //if (visu)
-    //    visu->Point(xp1,yp1,0);
+    //if (debugView)
+    //    debugView->Point(xp1,yp1,0);
     bool toucheplus = false;
     for (auto j=m_Plastique.begin();!toucheplus && j!=m_Plastique.end();j++)
     {
@@ -163,8 +163,8 @@ void StretchAlgorithmImpl::CorrigeSegment(vector<pair<double,double>>& v,
     }
     double xp2 = xm - xperp * d2;
     double yp2 = ym - yperp * d2;
-    //if (visu)
-    //    visu->Point(xp2,yp2,0);
+    //if (debugView)
+    //    debugView->Point(xp2,yp2,0);
     bool touchemoins = false;
     for (auto j=m_Plastique.begin();!touchemoins && j!=m_Plastique.end();j++)
     {
@@ -202,12 +202,12 @@ void StretchAlgorithmImpl::CorrigeSegment(vector<pair<double,double>>& v,
 
 void StretchAlgorithmImpl::AjoutePlastiqueLineaire(vector<pair<double,double>>& v,
         vector<pair<double,double>>& vTrans,
-        VisuGCode *visu)
+        GCodeDebugView *debugView)
 {
-    if (visu)
+    if (debugView)
     {
-        visu->Point(v[0].first,v[0].second,1);
-        visu->Point(v[v.size()-1].first,v[v.size()-1].second,2);
+        debugView->Point(v[0].first,v[0].second,1);
+        debugView->Point(v[v.size()-1].first,v[v.size()-1].second,2);
     }
     const double d1 = 0.5;
     const double d2 = /*0.7 / 2.0*/ (double)m_Params.wallWidth / 1000.0 / 2.0;
@@ -265,14 +265,14 @@ void StretchAlgorithmImpl::AjoutePlastiqueLineaire(vector<pair<double,double>>& 
         assert(yp >= 0 && yp < 200);
         vTrans[i].first = floor(xp*1000.0 + 0.5)/1000.0;
         vTrans[i].second = floor(yp*1000.0 + 0.5)/1000.0;
-        if (visu)
-            visu->Point(xp,yp,0);
+        if (debugView)
+            debugView->Point(xp,yp,0);
 
     }
     for (int i=0;i+1<v.size();i++)
-        CorrigeSegment(v,vTrans,i,i+1,visu,d2,d3,d4);
+        CorrigeSegment(v,vTrans,i,i+1,debugView,d2,d3,d4);
     if (v.size() > 2)
-        CorrigeSegment(v,vTrans,v.size()-1,v.size()-2,visu,d2,d3,d4);
+        CorrigeSegment(v,vTrans,v.size()-1,v.size()-2,debugView,d2,d3,d4);
     for (int i=v.size()-5;i+1<v.size();i++)
     {
         /*
@@ -285,12 +285,12 @@ void StretchAlgorithmImpl::AjoutePlastiqueLineaire(vector<pair<double,double>>& 
 
 void StretchAlgorithmImpl::AjoutePlastiqueCirculaire(vector<pair<double,double>>& v,
         vector<pair<double,double>>& vTrans,
-        VisuGCode *visu)
+        GCodeDebugView *debugView)
 {
-    if (visu)
+    if (debugView)
     {
-        visu->Point(v[0].first,v[0].second,3);
-        visu->Point(v[v.size()-1].first,v[v.size()-1].second,3);
+        debugView->Point(v[0].first,v[0].second,3);
+        debugView->Point(v[v.size()-1].first,v[v.size()-1].second,3);
     }
     const double d1 = 0.5;
     const double d2 = /*0.7 / 2.0*/ (double)m_Params.wallWidth / 1000.0 / 2.0;
@@ -355,14 +355,14 @@ void StretchAlgorithmImpl::AjoutePlastiqueCirculaire(vector<pair<double,double>>
         assert(yp >= 0 && yp < 200);
         vTrans[i].first = floor(xp*1000.0 + 0.5)/1000.0;
         vTrans[i].second = floor(yp*1000.0 + 0.5)/1000.0;
-        if (visu)
-            visu->Point(xp,yp,0);
+        if (debugView)
+            debugView->Point(xp,yp,0);
 
     }
     for (int i=0;i+1<v.size();i++)
-        CorrigeSegment(v,vTrans,i,i+1,visu,d2,d3,d4);
+        CorrigeSegment(v,vTrans,i,i+1,debugView,d2,d3,d4);
     if (v.size() > 2)
-        CorrigeSegment(v,vTrans,v.size()-1,v.size()-2,visu,d2,d3,d4);
+        CorrigeSegment(v,vTrans,v.size()-1,v.size()-2,debugView,d2,d3,d4);
     for (int i=0;i+1<v.size();i++)
     {
         /*
@@ -374,7 +374,7 @@ void StretchAlgorithmImpl::AjoutePlastiqueCirculaire(vector<pair<double,double>>
 }
 
 
-void StretchAlgorithmImpl::AjoutePlastique(vector<GCodeStep*>& vG,VisuGCode *visu)
+void StretchAlgorithmImpl::AjoutePlastique(vector<GCodeStep*>& vG,GCodeDebugView *debugView)
 {
     vector<pair<double,double>> v; // Positions d'origine
     vector<pair<double,double>> vTrans; // Positions transformées
@@ -384,15 +384,15 @@ void StretchAlgorithmImpl::AjoutePlastique(vector<GCodeStep*>& vG,VisuGCode *vis
         v.push_back(pair<double,double>((*i)->m_X,(*i)->m_Y));
     }
     if (v.size() > 2 && CarreDistance(v[0],v[v.size()-1]) < 0.3*0.3) // TODO Un paramètre pour la distance minimale?
-        AjoutePlastiqueCirculaire(v,vTrans,visu);
+        AjoutePlastiqueCirculaire(v,vTrans,debugView);
     else
-        AjoutePlastiqueLineaire(v,vTrans,visu);
-    if (visu)
+        AjoutePlastiqueLineaire(v,vTrans,debugView);
+    if (debugView)
     {
         for (int i=0;i+1<v.size();i++)
         {
-            visu->Segment(v[i].first,v[i].second,v[i+1].first,v[i+1].second,3);
-            visu->Segment(vTrans[i].first,vTrans[i].second,vTrans[i+1].first,vTrans[i+1].second,0);
+            debugView->Segment(v[i].first,v[i].second,v[i+1].first,v[i+1].second,3);
+            debugView->Segment(vTrans[i].first,vTrans[i].second,vTrans[i+1].first,vTrans[i+1].second,0);
         }
     }
     for (int i=0;i<vG.size();i++)
@@ -412,14 +412,14 @@ std::unique_ptr<StretchAlgorithm> StretchAlgorithmFactory(const Params& params)
     return unique_ptr<StretchAlgorithm>(new StretchAlgorithmImpl(params));
 }
 
-void StretchAlgorithmImpl::TraiteInternal(std::vector<GCodeStep>& v,VisuGCode *visu)
+void StretchAlgorithmImpl::TraiteInternal(std::vector<GCodeStep>& v,GCodeDebugView *debugView)
 {
     m_Plastique.clear();
     double curE = 0;
     vector<GCodeStep*> vPos;
     for (auto i = v.begin();i!=v.end();i++)
     {
-        if (visu)
+        if (debugView)
         {
             cerr << "pos " << i-v.begin() << " " << Dump(*i) << endl;
         }
@@ -429,12 +429,12 @@ void StretchAlgorithmImpl::TraiteInternal(std::vector<GCodeStep>& v,VisuGCode *v
         }
         if (i->m_E == curE)
         {
-            if (visu && vPos.size())
+            if (debugView && vPos.size())
             {
                 cerr << "flush pos " << i-v.begin() << " step " << i->m_Step << endl;
             }
             if (vPos.size() >= 2)
-                AjoutePlastique(vPos,visu);
+                AjoutePlastique(vPos,debugView);
             vPos.clear();
             vPos.push_back(&*i);
         }
@@ -446,7 +446,7 @@ void StretchAlgorithmImpl::TraiteInternal(std::vector<GCodeStep>& v,VisuGCode *v
     }
     if (vPos.size() >= 2)
     {
-        AjoutePlastique(vPos,visu);
+        AjoutePlastique(vPos,debugView);
     }
 }
 
@@ -454,8 +454,8 @@ void StretchAlgorithmImpl::Process(int nLayer,std::vector<GCodeStep>& v)
 {
     if (m_Params.dumpLayer == nLayer)
     {
-        unique_ptr<VisuGCode> visu(FabriqueVisu2());
-        TraiteInternal(v,visu.get());
+        unique_ptr<GCodeDebugView> debugView(GCodeDebugViewFactory());
+        TraiteInternal(v,debugView.get());
     }
     else
         TraiteInternal(v,NULL);

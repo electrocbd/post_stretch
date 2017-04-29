@@ -23,7 +23,7 @@ include_directories(${CAIRO_INCLUDE_DIR})
 
 add_library(stretch
     GCodeParser.cpp
-    visu.cpp
+    GCodeDebugView.cpp
     StretchAlgorithmImpl.cpp
     microgeo.cpp
     )
