@@ -9,6 +9,10 @@
 #include "params.h"
 #include <sstream>
 
+#define ENABLE_WIDETURN
+#define ENABLE_WIDECIRCLE
+#define ENABLE_PUSHWALL
+
 using namespace std;
 
 /** Implémentation concrète du traitement d'une couche */
@@ -57,7 +61,7 @@ class StretchAlgorithmImpl : public StretchAlgorithm
          * @param vTrans Positions transformées
          * @param debugView Si non nul, traces d'affichage
          */
-        void AjoutePlastiqueLineaire(vector<pair<double,double>>& v,
+        void WideTurn(vector<pair<double,double>>& v,
                vector<pair<double,double>>& vTrans,
                GCodeDebugView *debugView);
         /** La séquence semble être circulaire, il est possible de mieux calculer les virages
@@ -66,7 +70,7 @@ class StretchAlgorithmImpl : public StretchAlgorithm
          * @param vTrans Positions transformées
          * @param debugView Si non nul, traces d'affichage
          */
-        void AjoutePlastiqueCirculaire(vector<pair<double,double>>& v,
+        void WideCircle(vector<pair<double,double>>& v,
                vector<pair<double,double>>& vTrans,
                GCodeDebugView *debugView);
         /** Conversion de l'indice i passé en paramètre pour être dans l'intervalle [0:sz-1] */
@@ -203,15 +207,18 @@ void StretchAlgorithmImpl::CorrigeSegment(vector<pair<double,double>>& v,
     }
 }
 
-void StretchAlgorithmImpl::AjoutePlastiqueLineaire(vector<pair<double,double>>& v,
+void StretchAlgorithmImpl::WideTurn(vector<pair<double,double>>& v,
         vector<pair<double,double>>& vTrans,
         GCodeDebugView *debugView)
 {
+#ifdef ENABLE_WIDETURN
+    /*
     if (debugView)
     {
         debugView->Point(v[0].first,v[0].second,1);
         debugView->Point(v[v.size()-1].first,v[v.size()-1].second,2);
     }
+    */
     const double d1 = 0.5;
     const double d2 = /*0.7 / 2.0*/ (double)m_Params.wallWidth / 1000.0 / 2.0;
     const double d3 = /*0.8*/ (double)m_Params.nozzleDiameter / 1000.0;
@@ -233,15 +240,6 @@ void StretchAlgorithmImpl::AjoutePlastiqueLineaire(vector<pair<double,double>>& 
          * Si par contre il n'y a pas de plastique, le point B est déplacé vers le point E,
          * à une distance d4 en direction de l'extérieur du virage
          */
-        if (i >= 4)
-        {
-            /*
-             * J'ajoute le plastique réellement déposé avec un peu de retard,
-             * pour que ce qu'on est en train de déposer ne soit pas considéré
-             * comme un mur sur lequel on peut s'appuyer
-             */
-            m_Deposited.push_back(Segment(v[i-4].first,v[i-4].second,v[i-3].first,v[i-3].second));
-        }
         /*
          * Maintenant, je décale d'office, et le traitement des segments peut
          * me remettre au point de départ
@@ -268,33 +266,25 @@ void StretchAlgorithmImpl::AjoutePlastiqueLineaire(vector<pair<double,double>>& 
         assert(yp >= 0 && yp < 200);
         vTrans[i].first = floor(xp*1000.0 + 0.5)/1000.0;
         vTrans[i].second = floor(yp*1000.0 + 0.5)/1000.0;
-        if (debugView)
-            debugView->Point(xp,yp,0);
+        //if (debugView)
+        //    debugView->Point(xp,yp,0);
 
     }
-    for (int i=0;i+1<v.size();i++)
-        CorrigeSegment(v,vTrans,i,i+1,debugView,d2,d3,d4);
-    if (v.size() > 2)
-        CorrigeSegment(v,vTrans,v.size()-1,v.size()-2,debugView,d2,d3,d4);
-    for (int i=v.size()-5;i+1<v.size();i++)
-    {
-        /*
-         * J'ajoute le plastique à la position prévue initialement,
-         * puisque je cherche à ce qu'il se rétracte vers la bonne position
-         */
-        m_Deposited.push_back(Segment(v[i].first,v[i].second,v[i+1].first,v[i+1].second));
-    }
+#endif
 }
 
-void StretchAlgorithmImpl::AjoutePlastiqueCirculaire(vector<pair<double,double>>& v,
+void StretchAlgorithmImpl::WideCircle(vector<pair<double,double>>& v,
         vector<pair<double,double>>& vTrans,
         GCodeDebugView *debugView)
 {
+#ifdef ENABLE_WIDECIRCLE
+    /*
     if (debugView)
     {
         debugView->Point(v[0].first,v[0].second,3);
         debugView->Point(v[v.size()-1].first,v[v.size()-1].second,3);
     }
+    */
     const double d1 = 0.5;
     const double d2 = /*0.7 / 2.0*/ (double)m_Params.wallWidth / 1000.0 / 2.0;
     const double d3 = /*0.8*/ (double)m_Params.nozzleDiameter / 1000.0;
@@ -358,28 +348,20 @@ void StretchAlgorithmImpl::AjoutePlastiqueCirculaire(vector<pair<double,double>>
         assert(yp >= 0 && yp < 200);
         vTrans[i].first = floor(xp*1000.0 + 0.5)/1000.0;
         vTrans[i].second = floor(yp*1000.0 + 0.5)/1000.0;
+        /*
         if (debugView)
             debugView->Point(xp,yp,0);
+            */
 
     }
-    for (int i=0;i+1<v.size();i++)
-        CorrigeSegment(v,vTrans,i,i+1,debugView,d2,d3,d4);
-    if (v.size() > 2)
-        CorrigeSegment(v,vTrans,v.size()-1,v.size()-2,debugView,d2,d3,d4);
-    for (int i=0;i+1<v.size();i++)
-    {
-        /*
-         * J'ajoute le plastique à la position prévue initialement,
-         * puisque je cherche à ce qu'il se rétracte vers la bonne position
-         */
-        m_Deposited.push_back(Segment(v[i].first,v[i].second,v[i+1].first,v[i+1].second));
-    }
+#endif
 }
 
 void StretchAlgorithmImpl::PushWall(vector<pair<double,double>>& v,
         vector<pair<double,double>>& vTrans,
         GCodeDebugView *debugView)
 {
+#ifdef ENABLE_PUSHWALL
     const double d2 = /*0.7 / 2.0*/ (double)m_Params.wallWidth / 1000.0 / 2.0;
     const double d3 = /*0.8*/ (double)m_Params.nozzleDiameter / 1000.0;
     const double d4 = /*0.17*/(double)m_Params.stretch / 1000.0;
@@ -431,12 +413,6 @@ void StretchAlgorithmImpl::PushWall(vector<pair<double,double>>& v,
         {
             double xp = vTrans[i1].first + xperp * d4;
             double yp = vTrans[i1].second + yperp * d4;
-            if (debugView)
-            {
-                //debugView->Point(v[i1].first,v[i1].second,0);
-                //debugView->Point(xp,yp,1);
-                debugView->Array(v[i1].first,v[i1].second,xp,yp);
-            }
             assert(xp >= 0 && xp < 200);
             assert(yp >= 0 && yp < 200);
             vTrans[i1].first = floor(xp*1000.0 + 0.5)/1000.0;
@@ -446,8 +422,6 @@ void StretchAlgorithmImpl::PushWall(vector<pair<double,double>>& v,
         {
             double xp = vTrans[i1].first - xperp * d4;
             double yp = vTrans[i1].second - yperp * d4;
-            if (debugView)
-                debugView->Array(v[i1].first,v[i1].second,xp,yp);
             assert(xp >= 0 && xp < 200);
             assert(yp >= 0 && yp < 200);
             vTrans[i1].first = floor(xp*1000.0 + 0.5)/1000.0;
@@ -460,6 +434,7 @@ void StretchAlgorithmImpl::PushWall(vector<pair<double,double>>& v,
             vTrans[i1] = v[i1];
         }
     }
+#endif
 }
 
 
@@ -472,16 +447,12 @@ void StretchAlgorithmImpl::WorkOnSequence(vector<GCodeStep*>& vG,GCodeDebugView 
         vTrans.push_back(pair<double,double>((*i)->m_X,(*i)->m_Y));
         v.push_back(pair<double,double>((*i)->m_X,(*i)->m_Y));
     }
-#if 0
-    if (v.size() > 2 && CarreDistance(v[0],v[v.size()-1]) < 0.3*0.3) // TODO Un paramètre pour la distance minimale?
-        AjoutePlastiqueCirculaire(v,vTrans,debugView);
-    else
-        AjoutePlastiqueLineaire(v,vTrans,debugView);
-#endif
     if (debugView)
-    {
         debugView->Sequences(v,0,(double)m_Params.wallWidth / 1000.0);
-    }
+    if (v.size() > 2 && CarreDistance(v[0],v[v.size()-1]) < 0.3*0.3) // TODO Un paramètre pour la distance minimale?
+        WideCircle(v,vTrans,debugView);
+    else
+        WideTurn(v,vTrans,debugView);
     PushWall(v,vTrans,debugView);
     for (int i=0;i+1<v.size();i++)
     {
@@ -491,18 +462,10 @@ void StretchAlgorithmImpl::WorkOnSequence(vector<GCodeStep*>& vG,GCodeDebugView 
          */
         m_Deposited.push_back(Segment(v[i].first,v[i].second,v[i+1].first,v[i+1].second));
     }
-    /*
-    if (debugView)
-    {
-        for (int i=0;i+1<v.size();i++)
-        {
-            debugView->Segment(v[i].first,v[i].second,v[i+1].first,v[i+1].second,3,(double)m_Params.wallWidth / 1000.0);
-            //debugView->Segment(vTrans[i].first,vTrans[i].second,vTrans[i+1].first,vTrans[i+1].second,0);
-        }
-    }
-    */
     for (int i=0;i<vG.size();i++)
     {
+        if (debugView && (vTrans[i].first != v[i].first || vTrans[i].second != v[i].second))
+            debugView->Array(v[i].first,v[i].second,vTrans[i].first,vTrans[i].second);
         /* if (vG[i]->m_X != vTrans[i].first)
            cerr << "pos " << i << " " << vG[i]->m_X << " devient " << vTrans[i].first << endl;*/
         vG[i]->m_X = vTrans[i].first;

@@ -52,10 +52,6 @@ void GCodeDebugViewImpl::Array(double x1,double y1,double x2,double y2)
     Scale(x1,y1);
     Scale(x2,y2);
     cairo_save(c);
-    //cairo_translate(c,x1,y1);
-    //double d = sqrt((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)) / 8.0;
-    //cairo_scale(c,d,d);
-
     cairo_matrix_t matrix;
     cairo_matrix_init(&matrix,
             y2-y1,x1-x2,

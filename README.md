@@ -100,7 +100,7 @@ are kept.
 
 ### WideTurn
 
-![maw](images/maw.png)
+![wideturn](images/wideturn.png)
 
 ### WideCircle
 
@@ -108,5 +108,11 @@ The *WideCircle* algorithm is derived from the *WideTurn* algorithm when the fir
 of a sequence is the same as its last point. We may is this case consider that the extruded shape
 will be a closed polygon, which will shrink during cooling.
 
-![maw](images/maw.png)
+![widecircle](images/widecircle.png)
 
+
+### All together
+
+When all algorithms are activated, effects are cumulative
+
+![cumulative](images/cumulative.png)
