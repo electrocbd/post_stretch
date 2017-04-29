@@ -1,4 +1,4 @@
-#include "LitGCode.h"
+#include "GCodeParser.h"
 #include <iostream>
 #include <boost/spirit/include/qi.hpp>
 #include <boost/spirit/include/phoenix_bind.hpp>
@@ -126,12 +126,12 @@ struct ParserFichierGCode
     double m_ZCouche;
     /** Ensemble des opérations de la couche courante */
     vector<PasGCode> m_vPasCouche;
-    Traitement *traitement;
+    StretchAlgorithm *algo;
     EcritGCode m_Ecrit;
 
     ParserFichierGCode(
-            Traitement *traitement_) :
-        traitement(traitement_),
+            StretchAlgorithm *algo_) :
+        algo(algo_),
         m_nLayer(0),
         m_ZCouche(0) {}
 
@@ -157,7 +157,7 @@ void ParserFichierGCode::Flush()
 {
     if (m_vPasCouche.size())
     {
-        traitement->Traite(++m_nLayer,m_vPasCouche);
+        algo->Process(++m_nLayer,m_vPasCouche);
         for (auto i = m_vPasCouche.begin() ; i != m_vPasCouche.end(); i++)
             m_Ecrit.Ecrit(*i);
     }
@@ -170,7 +170,7 @@ void ParserFichierGCode::FlushPas()
     {
         if (m_vPasCouche.size())
         {
-            traitement->Traite(++m_nLayer,m_vPasCouche);
+            algo->Process(++m_nLayer,m_vPasCouche);
             for (auto i = m_vPasCouche.begin() ; i != m_vPasCouche.end(); i++)
             {
                 assert(i->m_Z == m_vPasCouche.begin()->m_Z);
@@ -271,13 +271,13 @@ struct grammaire_gcode : grammar<string::iterator>
     rule<string::iterator> start;
 };
 
-void LitGCode(Traitement *traitement)
+void GCodeParser(StretchAlgorithm *algo,istream& is)
 {
     string str;
     int nLigne = 0;
-    ParserFichierGCode data(traitement);
+    ParserFichierGCode data(algo);
     grammaire_gcode grammaire_gcode_obj(data);
-    while (!getline(cin,str).fail())
+    while (!getline(is,str).fail())
     {
         ++nLigne;
         if (str.size() && str[str.size() -1] == '\r')

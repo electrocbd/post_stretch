@@ -1,14 +1,21 @@
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 #include <iostream>
-#include "LitGCode.h"
-#include "Traitement.h"
+#include "GCodeParser.h"
+#include "StretchAlgorithm.h"
 #include "params.h"
+#include <fstream>
 
 using namespace std;
 
 namespace po = boost::program_options;
 namespace fs = boost::filesystem;
+
+void Usage(po::options_description& visible)
+{
+    cout << "Usage: post_stretch infile [options]" << endl;
+    cout << visible << "\n";
+}
 
 int main(int argc,char **argv)
 {
@@ -16,7 +23,7 @@ int main(int argc,char **argv)
     string confFile;
     Params params;
     /*
-     * Options uniquement pour la ligne de commande
+     * Options allowed only on command line
      */
     po::options_description generic("Generic options");
     generic.add_options()
@@ -26,22 +33,22 @@ int main(int argc,char **argv)
         ;
 
     /*
-     * Options pour la ligne de commande et le fichier de paramètres
+     * Options allowed both on command line and in config file
      */
     po::options_description config("Allowed options");
     config.add_options()
-        ("stretch",po::value<int>(&params.stretch)->default_value(170),"Décalage en microns")
-        ("width",po::value<int>(&params.wallWidth)->default_value(700),"Largeur de piste en microns")
-        ("nozzle",po::value<int>(&params.nozzleDiameter)->default_value(800),"Diamètre du bec en microns")
-        ("dumpLayer",po::value<int>(&params.dumpLayer)->default_value(0),"Générer une image pour une couche")
+        ("stretch",po::value<int>(&params.stretch)->default_value(170),"Stretch distance in microns")
+        ("width",po::value<int>(&params.wallWidth)->default_value(700),"Wall width in microns")
+        ("nozzle",po::value<int>(&params.nozzleDiameter)->default_value(800),"Nozzle diameter in microns")
+        ("dumpLayer",po::value<int>(&params.dumpLayer)->default_value(0),"Debug one layer")
         ;
 
     /*
-     * Options cachées
+     * Hidden options
      */
     po::options_description hidden("Hidden options");
     hidden.add_options()
-        ("input-file", po::value<string>(&GCodeFile)->default_value(""), "g-code file name")
+        ("input-file", po::value<string>(&GCodeFile), "g-code file name")
         ;
 
 
@@ -68,12 +75,14 @@ int main(int argc,char **argv)
 
         if (vm.count("help"))
         {
-            cout << visible << "\n";
+            Usage(visible);
             return 0;
         }
         if (vm.count("version"))
         {
             cout << "post_stretch version 1.0" << endl;
+            cout << "C.Baribaud 2017" << endl;
+            cout << "http://github.com/electrocbd/post_stretch" << endl;
             return 0;
         }
         if (!confFile.empty())
@@ -87,16 +96,25 @@ int main(int argc,char **argv)
             po::store(po::parse_config_file(isp,config_file_options),vm);
             po::notify(vm);
         }
-        /*
-        if (rbFile.empty())
+        if (GCodeFile.empty())
         {
             cerr << "You must specify input file name" << endl;
-            cerr << visible << endl;
+            Usage(visible);
             return -1;
         }
-        */
-        unique_ptr<Traitement> traitement(FabriqueTraitement(params));
-        LitGCode(traitement.get());
+        unique_ptr<StretchAlgorithm> algo(StretchAlgorithmFactory(params));
+        if (GCodeFile == "--")
+            GCodeParser(algo.get(),cin);
+        else
+        {
+            ifstream is(GCodeFile.c_str());
+            if (!is.is_open())
+            {
+                cerr << "Unable to read input file " << GCodeFile << endl;
+                return -1;
+            }
+            GCodeParser(algo.get(),is);
+        }
     }
     catch (std::exception& err)
     {

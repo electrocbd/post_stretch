@@ -1,4 +1,4 @@
-#include "Traitement.h"
+#include "StretchAlgorithm.h"
 #include <memory>
 #include "visu.h"
 //#include "clipper/clipper.hpp"
@@ -12,7 +12,7 @@
 using namespace std;
 
 /** Implémentation concrète du traitement d'une couche */
-class ImplTraitement : public Traitement
+class StretchAlgorithmImpl : public StretchAlgorithm
 {
     public:
         struct Segment
@@ -26,10 +26,10 @@ class ImplTraitement : public Traitement
         };
 
 
-        ImplTraitement(const Params& params_) :
+        StretchAlgorithmImpl(const Params& params_) :
             m_Params(params_) {}
-        virtual ~ImplTraitement() {}
-        virtual void Traite(int nLayer,std::vector<PasGCode>& v);
+        virtual ~StretchAlgorithmImpl() {}
+        virtual void Process(int nLayer,std::vector<PasGCode>& v);
     private:
         void TraiteInternal(std::vector<PasGCode>& v,VisuGCode *visu);
         const Params& m_Params /** Paramètres globaux */;
@@ -70,7 +70,7 @@ class ImplTraitement : public Traitement
         static int IndiceCirculaire(int i,int sz);
 };
 
-int ImplTraitement::IndiceCirculaire(int i,int sz)
+int StretchAlgorithmImpl::IndiceCirculaire(int i,int sz)
 {
     while (i < 0)
         i += sz;
@@ -80,12 +80,12 @@ int ImplTraitement::IndiceCirculaire(int i,int sz)
     return i;
 }
 
-double ImplTraitement::CarreDistance(const pair<double,double>& p1,const pair<double,double>& p2)
+double StretchAlgorithmImpl::CarreDistance(const pair<double,double>& p1,const pair<double,double>& p2)
 {
     return (p2.first-p1.first)*(p2.first-p1.first) + (p2.second-p1.second)*(p2.second-p1.second);
 }
 
-string ImplTraitement::Dump(const PasGCode& pas)
+string StretchAlgorithmImpl::Dump(const PasGCode& pas)
 {
     ostringstream ss;
     if (pas.m_Pas == GC_NOP)
@@ -127,7 +127,7 @@ string ImplTraitement::Dump(const PasGCode& pas)
     return ss.str();
 }
 
-void ImplTraitement::CorrigeSegment(vector<pair<double,double>>& v,
+void StretchAlgorithmImpl::CorrigeSegment(vector<pair<double,double>>& v,
         vector<pair<double,double>>& vTrans,
         int i1,
         int i2,
@@ -200,7 +200,7 @@ void ImplTraitement::CorrigeSegment(vector<pair<double,double>>& v,
     }
 }
 
-void ImplTraitement::AjoutePlastiqueLineaire(vector<pair<double,double>>& v,
+void StretchAlgorithmImpl::AjoutePlastiqueLineaire(vector<pair<double,double>>& v,
         vector<pair<double,double>>& vTrans,
         VisuGCode *visu)
 {
@@ -283,7 +283,7 @@ void ImplTraitement::AjoutePlastiqueLineaire(vector<pair<double,double>>& v,
     }
 }
 
-void ImplTraitement::AjoutePlastiqueCirculaire(vector<pair<double,double>>& v,
+void StretchAlgorithmImpl::AjoutePlastiqueCirculaire(vector<pair<double,double>>& v,
         vector<pair<double,double>>& vTrans,
         VisuGCode *visu)
 {
@@ -374,7 +374,7 @@ void ImplTraitement::AjoutePlastiqueCirculaire(vector<pair<double,double>>& v,
 }
 
 
-void ImplTraitement::AjoutePlastique(vector<PasGCode*>& vG,VisuGCode *visu)
+void StretchAlgorithmImpl::AjoutePlastique(vector<PasGCode*>& vG,VisuGCode *visu)
 {
     vector<pair<double,double>> v; // Positions d'origine
     vector<pair<double,double>> vTrans; // Positions transformées
@@ -407,12 +407,12 @@ void ImplTraitement::AjoutePlastique(vector<PasGCode*>& vG,VisuGCode *visu)
     }
 }
 
-Traitement *FabriqueTraitement(const Params& params)
+std::unique_ptr<StretchAlgorithm> StretchAlgorithmFactory(const Params& params)
 {
-    return new ImplTraitement(params);
+    return unique_ptr<StretchAlgorithm>(new StretchAlgorithmImpl(params));
 }
 
-void ImplTraitement::TraiteInternal(std::vector<PasGCode>& v,VisuGCode *visu)
+void StretchAlgorithmImpl::TraiteInternal(std::vector<PasGCode>& v,VisuGCode *visu)
 {
     m_Plastique.clear();
     double curE = 0;
@@ -450,7 +450,7 @@ void ImplTraitement::TraiteInternal(std::vector<PasGCode>& v,VisuGCode *visu)
     }
 }
 
-void ImplTraitement::Traite(int nLayer,std::vector<PasGCode>& v)
+void StretchAlgorithmImpl::Process(int nLayer,std::vector<PasGCode>& v)
 {
     if (m_Params.dumpLayer == nLayer)
     {

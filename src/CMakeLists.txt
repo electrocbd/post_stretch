@@ -3,7 +3,7 @@ project(post_stretch)
 
 set (CMAKE_CXX_STANDARD 11)
 
-find_package(Boost 1.55.0 REQUIRED COMPONENTS system filesystem program_options)
+find_package(Boost 1.54.0 REQUIRED COMPONENTS system filesystem program_options)
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR})
 LINK_DIRECTORIES(${Boost_LIBRARY_DIRS})
 
@@ -22,9 +22,9 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CAIRO_INCLUDE_DIR})
 
 add_library(stretch
-    LitGCode.cpp
+    GCodeParser.cpp
     visu.cpp
-    ImplTraitement.cpp
+    StretchAlgorithmImpl.cpp
     microgeo.cpp
     )
 
