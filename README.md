@@ -85,7 +85,18 @@ The program uses three different algorithms: *PushWall*, *WideTurn* and *WideCir
 
 ### PushWall
 
-![maw](images/maw.png)
+When material is extruded at a position which touches a previously deposited wall,
+it is pushed back by the wall.
+
+To cancel this movement, the algorithm forces an opposite movement, it goes closer to the wall.
+
+In the following picture, the cancelling effect is shown by green arrays. The black lines are the initial, wanted, positions.
+
+![pushwall](images/pushwall.png)
+
+The algorithm moves the initial points only if there is material previously extruded for the same layer
+at one side of the current segment, but not at both sides. If the segment is surrounded by walls, the initial positions
+are kept.
 
 ### WideTurn
 

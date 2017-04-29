@@ -2,6 +2,7 @@
 #include <iostream>
 #include <cairo.h>
 #include <cairo-svg.h>
+#include <cmath>
 
 using namespace std;
 
@@ -24,17 +25,19 @@ struct GCodeDebugViewImpl : GCodeDebugView
         if (c)
             cairo_destroy(c);
     }
-    virtual void Segment(double x1,double y1,double x2,double y2,int nColor);
+    virtual void Segment(double x1,double y1,double x2,double y2,int nColor,double width);
     virtual void Point(double x,double y,int nColor);
     /** Scale size */
     static double Scale(double sz);
     /** Scale position and flip Y axis */
     static void Scale(double& x,double& y);
+    virtual void Sequences(std::vector<std::pair<double,double>>& v,int nColor,double width);
+    virtual void Array(double x1,double y1,double x2,double y2);
 };
 
 double GCodeDebugViewImpl::Scale(double sz)
 {
-    return sz * 10.0;
+    return sz * 60.0;
 }
 
 void GCodeDebugViewImpl::Scale(double& x,double& y)
@@ -44,15 +47,121 @@ void GCodeDebugViewImpl::Scale(double& x,double& y)
     y = Scale(y);
 }
 
-void GCodeDebugViewImpl::Segment(double x1,double y1,double x2,double y2,int nColor)
+void GCodeDebugViewImpl::Array(double x1,double y1,double x2,double y2)
 {
     Scale(x1,y1);
     Scale(x2,y2);
-    cairo_set_line_width(c,Scale(0.7));
+    cairo_save(c);
+    //cairo_translate(c,x1,y1);
+    //double d = sqrt((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)) / 8.0;
+    //cairo_scale(c,d,d);
+
+    cairo_matrix_t matrix;
+    cairo_matrix_init(&matrix,
+            y2-y1,x1-x2,
+            x2-x1,y2-y1,
+            x1,y1);
+    cairo_transform(c,&matrix);
+    cairo_scale(c,1.0/8.0,1.0/8.0);
+
+
+    cairo_move_to(c,-1,0);
+    cairo_line_to(c,1,0);
+    cairo_line_to(c,1,4);
+    cairo_line_to(c,3,4);
+    cairo_line_to(c,0,8);
+    cairo_line_to(c,-3,4);
+    cairo_line_to(c,-1,4);
+    cairo_line_to(c,-1,0);
+
+    cairo_set_source_rgba(c,0,1,0.3,0.6);
+    cairo_fill(c);
+
+    cairo_restore(c);
+}
+
+void GCodeDebugViewImpl::Sequences(std::vector<std::pair<double,double>>& v,int nColor,double width)
+{
+    cairo_set_line_cap(c,CAIRO_LINE_CAP_ROUND);
+    for (int i=0;i<v.size();i++)
+    {
+        double x1 = v[i].first;
+        double y1 = v[i].second;
+        Scale(x1,y1);
+        cairo_set_line_width(c,Scale(width));
+        switch (nColor)
+        {
+            case 0:
+                cairo_set_source_rgba(c,1,0,0,0.9);
+                break;
+            case 1:
+                cairo_set_source_rgba(c,1,0,0,0.1);
+                break;
+            case 3:
+                cairo_set_source_rgba(c,1,0,0,0); // transparent
+                break;
+            case 2:
+            default:
+                cairo_set_source_rgba(c,0,1,1,0.4);
+                break;
+        }
+        if (i == 0)
+            cairo_move_to(c,x1,y1);
+        else
+            cairo_line_to(c,x1,y1);
+    }
+    cairo_stroke(c);
+    cairo_set_line_cap(c,CAIRO_LINE_CAP_ROUND);
+    cairo_set_line_width(c,Scale(width)*0.5);
+    for (int i=0;i<v.size();i++)
+    {
+        double x1 = v[i].first;
+        double y1 = v[i].second;
+        Scale(x1,y1);
+        switch (nColor)
+        {
+            case 0:
+            default:
+                cairo_set_source_rgba(c,0,0,0,0.5);
+                break;
+        }
+        if (i == 0)
+            cairo_move_to(c,x1,y1);
+        else
+            cairo_line_to(c,x1,y1);
+    }
+    cairo_stroke(c);
+    cairo_set_line_cap(c,CAIRO_LINE_CAP_ROUND);
+    cairo_set_line_width(c,Scale(width)*0.1);
+    for (int i=0;i<v.size();i++)
+    {
+        double x1 = v[i].first;
+        double y1 = v[i].second;
+        Scale(x1,y1);
+        switch (nColor)
+        {
+            case 0:
+            default:
+                cairo_set_source_rgba(c,0,0,0,0.5);
+                break;
+        }
+        if (i == 0)
+            cairo_move_to(c,x1,y1);
+        else
+            cairo_line_to(c,x1,y1);
+    }
+    cairo_stroke(c);
+}
+
+void GCodeDebugViewImpl::Segment(double x1,double y1,double x2,double y2,int nColor,double width)
+{
+    Scale(x1,y1);
+    Scale(x2,y2);
+    cairo_set_line_width(c,Scale(width));
     switch (nColor)
     {
         case 0:
-            cairo_set_source_rgba(c,0,1,0,0.1);
+            cairo_set_source_rgba(c,1,0,0,1);
             break;
         case 1:
             cairo_set_source_rgba(c,1,0,0,0.1);
@@ -70,11 +179,14 @@ void GCodeDebugViewImpl::Segment(double x1,double y1,double x2,double y2,int nCo
     cairo_line_to(c,x2,y2);
     cairo_stroke(c);
 
-    cairo_set_line_width(c,Scale(0.7)*0.1);
-    if (nColor == 3)
-        cairo_set_source_rgba(c,0.1,0.1,0.1,0.5);
-    else
-        cairo_set_source_rgba(c,0,0.4,0.5,0.9);
+    cairo_set_line_width(c,Scale(width)*0.5);
+    switch (nColor)
+    {
+        case 0:
+        default:
+            cairo_set_source_rgba(c,0,0,0,0.5);
+            break;
+    }
     cairo_set_line_cap(c,CAIRO_LINE_CAP_ROUND);
     cairo_move_to(c,x1,y1);
     cairo_line_to(c,x2,y2);

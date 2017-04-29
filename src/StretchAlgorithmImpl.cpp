@@ -31,10 +31,13 @@ class StretchAlgorithmImpl : public StretchAlgorithm
         virtual ~StretchAlgorithmImpl() {}
         virtual void Process(int nLayer,std::vector<GCodeStep>& v);
     private:
-        void TraiteInternal(std::vector<GCodeStep>& v,GCodeDebugView *debugView);
+        void PushWall(vector<pair<double,double>>& v,
+                vector<pair<double,double>>& vTrans,
+                GCodeDebugView *debugView);
+        void Process(std::vector<GCodeStep>& v,GCodeDebugView *debugView);
         const Params& m_Params /** Paramètres globaux */;
-        std::vector<Segment> m_Plastique /** Segments de plastique de la couche courante */;
-        void AjoutePlastique(vector<GCodeStep*>& v,GCodeDebugView *debugView);
+        std::vector<Segment> m_Deposited /** Segments de plastique de la couche courante */;
+        void WorkOnSequence(vector<GCodeStep*>& v,GCodeDebugView *debugView);
         string Dump(const GCodeStep& step);
         double CarreDistance(const pair<double,double>& p1,const pair<double,double>& p2);
         /** Corrige un segment aux indices i1 et i2 dans les deux tableaux v (mouvement désiré)
@@ -156,7 +159,7 @@ void StretchAlgorithmImpl::CorrigeSegment(vector<pair<double,double>>& v,
     //if (debugView)
     //    debugView->Point(xp1,yp1,0);
     bool toucheplus = false;
-    for (auto j=m_Plastique.begin();!toucheplus && j!=m_Plastique.end();j++)
+    for (auto j=m_Deposited.begin();!toucheplus && j!=m_Deposited.end();j++)
     {
         if (CarreDistanceSegmentPoint(xp1,yp1,j->x1,j->y1,j->x2,j->y2) <= (d3/2.0)*(d3/2.0))
             toucheplus = true;
@@ -166,7 +169,7 @@ void StretchAlgorithmImpl::CorrigeSegment(vector<pair<double,double>>& v,
     //if (debugView)
     //    debugView->Point(xp2,yp2,0);
     bool touchemoins = false;
-    for (auto j=m_Plastique.begin();!touchemoins && j!=m_Plastique.end();j++)
+    for (auto j=m_Deposited.begin();!touchemoins && j!=m_Deposited.end();j++)
     {
         if (CarreDistanceSegmentPoint(xp2,yp2,j->x1,j->y1,j->x2,j->y2) <= (d3/2.0)*(d3/2.0))
             touchemoins = true;
@@ -237,7 +240,7 @@ void StretchAlgorithmImpl::AjoutePlastiqueLineaire(vector<pair<double,double>>& 
              * pour que ce qu'on est en train de déposer ne soit pas considéré
              * comme un mur sur lequel on peut s'appuyer
              */
-            m_Plastique.push_back(Segment(v[i-4].first,v[i-4].second,v[i-3].first,v[i-3].second));
+            m_Deposited.push_back(Segment(v[i-4].first,v[i-4].second,v[i-3].first,v[i-3].second));
         }
         /*
          * Maintenant, je décale d'office, et le traitement des segments peut
@@ -279,7 +282,7 @@ void StretchAlgorithmImpl::AjoutePlastiqueLineaire(vector<pair<double,double>>& 
          * J'ajoute le plastique à la position prévue initialement,
          * puisque je cherche à ce qu'il se rétracte vers la bonne position
          */
-        m_Plastique.push_back(Segment(v[i].first,v[i].second,v[i+1].first,v[i+1].second));
+        m_Deposited.push_back(Segment(v[i].first,v[i].second,v[i+1].first,v[i+1].second));
     }
 }
 
@@ -369,32 +372,135 @@ void StretchAlgorithmImpl::AjoutePlastiqueCirculaire(vector<pair<double,double>>
          * J'ajoute le plastique à la position prévue initialement,
          * puisque je cherche à ce qu'il se rétracte vers la bonne position
          */
-        m_Plastique.push_back(Segment(v[i].first,v[i].second,v[i+1].first,v[i+1].second));
+        m_Deposited.push_back(Segment(v[i].first,v[i].second,v[i+1].first,v[i+1].second));
+    }
+}
+
+void StretchAlgorithmImpl::PushWall(vector<pair<double,double>>& v,
+        vector<pair<double,double>>& vTrans,
+        GCodeDebugView *debugView)
+{
+    const double d2 = /*0.7 / 2.0*/ (double)m_Params.wallWidth / 1000.0 / 2.0;
+    const double d3 = /*0.8*/ (double)m_Params.nozzleDiameter / 1000.0;
+    const double d4 = /*0.17*/(double)m_Params.stretch / 1000.0;
+     for (int i=0;i<v.size();i++)
+    {
+        int i1 = i;
+        int i2 = i+1;
+        if (i2 == v.size())
+            i2 = i-1;
+        /*
+         * Je n'ai qu'un segment. S'il n'y a du plastique que d'un seul côté,
+         * je décale le segment pour "pousser le mur"
+         */
+        //double xm = (v[i1].first + v[i2].first) / 2.0;
+        double xm = v[i1].first;
+        //double ym = (v[i1].second + v[i2].second) / 2.0;
+        double ym = v[i1].second;
+        //if (debugView)
+        //    debugView->Point(xm,ym,0);
+        double xperp = -(v[i2].second - v[i1].second); // Coordonnées de la perpendiculaire au segment
+        double yperp = (v[i2].first - v[i1].first);
+        double dperp = sqrt(xperp*xperp+yperp*yperp); // Norme de la perpendiculaire
+        xperp /= dperp;
+        yperp /= dperp;
+        double xp1 = xm + xperp * d2;
+        double yp1 = ym + yperp * d2;
+        //if (debugView)
+        //    debugView->Point(xp1,yp1,0);
+        bool toucheplus = false;
+        for (auto j=m_Deposited.begin();!toucheplus && j!=m_Deposited.end();j++)
+        {
+            if (CarreDistanceSegmentPoint(xp1,yp1,j->x1,j->y1,j->x2,j->y2) <= (d3/2.0)*(d3/2.0))
+                toucheplus = true;
+        }
+        double xp2 = xm - xperp * d2;
+        double yp2 = ym - yperp * d2;
+        //if (debugView)
+        //    debugView->Point(xp2,yp2,0);
+        bool touchemoins = false;
+        for (auto j=m_Deposited.begin();!touchemoins && j!=m_Deposited.end();j++)
+        {
+            if (CarreDistanceSegmentPoint(xp2,yp2,j->x1,j->y1,j->x2,j->y2) <= (d3/2.0)*(d3/2.0))
+                touchemoins = true;
+        }
+        /*
+         * Je décale vTrans, pour que l'effet soit cumulatif
+         */
+        if (toucheplus && !touchemoins)
+        {
+            double xp = vTrans[i1].first + xperp * d4;
+            double yp = vTrans[i1].second + yperp * d4;
+            if (debugView)
+            {
+                //debugView->Point(v[i1].first,v[i1].second,0);
+                //debugView->Point(xp,yp,1);
+                debugView->Array(v[i1].first,v[i1].second,xp,yp);
+            }
+            assert(xp >= 0 && xp < 200);
+            assert(yp >= 0 && yp < 200);
+            vTrans[i1].first = floor(xp*1000.0 + 0.5)/1000.0;
+            vTrans[i1].second = floor(yp*1000.0 + 0.5)/1000.0;
+        }
+        if (touchemoins && !toucheplus)
+        {
+            double xp = vTrans[i1].first - xperp * d4;
+            double yp = vTrans[i1].second - yperp * d4;
+            if (debugView)
+                debugView->Array(v[i1].first,v[i1].second,xp,yp);
+            assert(xp >= 0 && xp < 200);
+            assert(yp >= 0 && yp < 200);
+            vTrans[i1].first = floor(xp*1000.0 + 0.5)/1000.0;
+            vTrans[i1].second = floor(yp*1000.0 + 0.5)/1000.0;
+        }
+        if (toucheplus && touchemoins)
+        {
+            // Vu qu'on est entouré de murs, autant rester sages
+            // J'annule toutes les transformations
+            vTrans[i1] = v[i1];
+        }
     }
 }
 
 
-void StretchAlgorithmImpl::AjoutePlastique(vector<GCodeStep*>& vG,GCodeDebugView *debugView)
+void StretchAlgorithmImpl::WorkOnSequence(vector<GCodeStep*>& vG,GCodeDebugView *debugView)
 {
-    vector<pair<double,double>> v; // Positions d'origine
-    vector<pair<double,double>> vTrans; // Positions transformées
+    vector<pair<double,double>> v; // Original positions, where material should be after cooling
+    vector<pair<double,double>> vTrans; // New positions
     for (auto i = vG.begin();i!=vG.end();i++)
     {
         vTrans.push_back(pair<double,double>((*i)->m_X,(*i)->m_Y));
         v.push_back(pair<double,double>((*i)->m_X,(*i)->m_Y));
     }
+#if 0
     if (v.size() > 2 && CarreDistance(v[0],v[v.size()-1]) < 0.3*0.3) // TODO Un paramètre pour la distance minimale?
         AjoutePlastiqueCirculaire(v,vTrans,debugView);
     else
         AjoutePlastiqueLineaire(v,vTrans,debugView);
+#endif
+    if (debugView)
+    {
+        debugView->Sequences(v,0,(double)m_Params.wallWidth / 1000.0);
+    }
+    PushWall(v,vTrans,debugView);
+    for (int i=0;i+1<v.size();i++)
+    {
+        /*
+         * The material positions recorded are the initial positions, because the new positions
+         * are temporary. When material cools down, it moves to the initial and wanted positions.
+         */
+        m_Deposited.push_back(Segment(v[i].first,v[i].second,v[i+1].first,v[i+1].second));
+    }
+    /*
     if (debugView)
     {
         for (int i=0;i+1<v.size();i++)
         {
-            debugView->Segment(v[i].first,v[i].second,v[i+1].first,v[i+1].second,3);
-            debugView->Segment(vTrans[i].first,vTrans[i].second,vTrans[i+1].first,vTrans[i+1].second,0);
+            debugView->Segment(v[i].first,v[i].second,v[i+1].first,v[i+1].second,3,(double)m_Params.wallWidth / 1000.0);
+            //debugView->Segment(vTrans[i].first,vTrans[i].second,vTrans[i+1].first,vTrans[i+1].second,0);
         }
     }
+    */
     for (int i=0;i<vG.size();i++)
     {
         /* if (vG[i]->m_X != vTrans[i].first)
@@ -412,9 +518,9 @@ std::unique_ptr<StretchAlgorithm> StretchAlgorithmFactory(const Params& params)
     return unique_ptr<StretchAlgorithm>(new StretchAlgorithmImpl(params));
 }
 
-void StretchAlgorithmImpl::TraiteInternal(std::vector<GCodeStep>& v,GCodeDebugView *debugView)
+void StretchAlgorithmImpl::Process(std::vector<GCodeStep>& v,GCodeDebugView *debugView)
 {
-    m_Plastique.clear();
+    m_Deposited.clear();
     double curE = 0;
     vector<GCodeStep*> vPos;
     for (auto i = v.begin();i!=v.end();i++)
@@ -434,7 +540,7 @@ void StretchAlgorithmImpl::TraiteInternal(std::vector<GCodeStep>& v,GCodeDebugVi
                 cerr << "flush pos " << i-v.begin() << " step " << i->m_Step << endl;
             }
             if (vPos.size() >= 2)
-                AjoutePlastique(vPos,debugView);
+                WorkOnSequence(vPos,debugView);
             vPos.clear();
             vPos.push_back(&*i);
         }
@@ -446,7 +552,7 @@ void StretchAlgorithmImpl::TraiteInternal(std::vector<GCodeStep>& v,GCodeDebugVi
     }
     if (vPos.size() >= 2)
     {
-        AjoutePlastique(vPos,debugView);
+        WorkOnSequence(vPos,debugView);
     }
 }
 
@@ -455,10 +561,10 @@ void StretchAlgorithmImpl::Process(int nLayer,std::vector<GCodeStep>& v)
     if (m_Params.dumpLayer == nLayer)
     {
         unique_ptr<GCodeDebugView> debugView(GCodeDebugViewFactory());
-        TraiteInternal(v,debugView.get());
+        Process(v,debugView.get());
     }
     else
-        TraiteInternal(v,NULL);
+        Process(v,NULL);
 
 }
 
