@@ -100,19 +100,48 @@ are kept.
 
 ### WideTurn
 
+When deposited material takes a turn, the material tends to shrink and to go inside the turn,
+having at the end a more rectilinear shape than expected.
+
+To undo this effect, the system moves points outside the turns.
+
+![wideturntriangle](images/wideturn_triangle.svg)
+
+In this example, there are three consecutive points A, B and C. The initial extrusion move is segment f then segment g.
+
+The system computes the line h, then perpendicular vector v, then point D at distance "stretch" from point B following v.
+
+The point D is used instead of point B, and the system does the same for all consecutive points of any sequence.
+
 ![wideturn](images/wideturn.png)
+
+If consecutive points are too close, the orientation of the resulting triangle can't be determined with an acceptable precision.
+The algorithm looks for following and preceding points until a minimal distance is reached.
+So A, B and C are not necessarily successive.
+
+The algorithm can't modify the position of the first and the last points of a sequence.
+
 
 ### WideCircle
 
 The *WideCircle* algorithm is derived from the *WideTurn* algorithm when the first point
 of a sequence is the same as its last point. We may is this case consider that the extruded shape
-will be a closed polygon, which will shrink during cooling.
+will be a closed polygon.
+
+It is then always possible to find a triangle to move each point of the sequence.
 
 ![widecircle](images/widecircle.png)
 
 
 ### All together
 
-When all algorithms are activated, effects are cumulative
+When all algorithms are activated, effects are cumulated: An algorithm may revert the effect of another algorithm, or amplify it.
+
+
+The following picture is a graphic dump of the current `post_stretch` program, using:
+
+```sh
+post_stretch UM2_spirale_trous.gcode --dumpLayer 3 >/dev/null
+```
 
 ![cumulative](images/cumulative.png)
