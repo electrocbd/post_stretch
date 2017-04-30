@@ -105,7 +105,7 @@ having at the end a more rectilinear shape than expected.
 
 To undo this effect, the system moves points outside the turns.
 
-![wideturntriangle](images/wideturn_triangle.svg)
+![wideturntriangle](images/wideturn_triangle.png)
 
 In this example, there are three consecutive points A, B and C. The initial extrusion move is segment f then segment g.
 
