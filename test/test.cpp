@@ -1,6 +1,7 @@
 #define BOOST_TEST_MODULE MyTest
 #include <boost/test/unit_test.hpp>
 
+#include <cmath>
 #include "microgeo.h"
 
 BOOST_AUTO_TEST_SUITE(test_suite_microgeo)

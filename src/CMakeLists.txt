@@ -28,6 +28,11 @@ add_library(stretch
     microgeo.cpp
     )
 
+target_link_libraries(stretch
+    ${CAIRO_LIBRARY}
+    )
+
+
 add_executable(post_stretch
     main.cpp
    )
@@ -36,7 +41,6 @@ target_link_libraries(post_stretch
     ${Boost_FILESYSTEM_LIBRARY}
     ${Boost_SYSTEM_LIBRARY} 
     ${Boost_PROGRAM_OPTIONS_LIBRARY}
-    ${CAIRO_LIBRARY}
     stretch
     )
 
